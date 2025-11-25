@@ -21,7 +21,7 @@ CHANNELS = [
 
 # ===== إعدادات Google Sheets =====
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("jobautomation-478807-e51a53954b1c.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("jobautomation-478807-01a5fb3a51f5.json", scope)
 client_gs = gspread.authorize(creds)
 
 spreadsheet = client_gs.open("telegram_jobs_raw")
@@ -55,3 +55,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
