@@ -1,53 +1,57 @@
 import hashlib
-import datetime
 from telethon import TelegramClient, events
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import datetime
+import asyncio
 
-# إعدادات Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
-client_gs = gspread.authorize(creds)
-sheet = client_gs.open("telegram_jobs_raw").worksheet("raw_jobs")
-
-# إعدادات Telegram
+# ===== إعدادات Telegram =====
 api_id = 35479481
 api_hash = "8f12ca035cdad9e39e471b6ae2e2dd25"
-telegram_client = TelegramClient("telegram_jobs_raw_session", api_id, api_hash)
 
-# قنوات التليجرام
+# اسم الجلسة
+client = TelegramClient("telegram_jobs_raw_session", api_id, api_hash)
+
+# القنوات التي سيتم سحب الوظائف منها
 CHANNELS = [
     "https://t.me/ewdifh",
     "https://t.me/Engineers_Jobs",
     "https://t.me/grobksa",
 ]
 
-# كاش الهاشات لمنع التكرار
-HASH_CACHE = set()
+# ===== إعدادات Google Sheets =====
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("jobautomation-478807-e51a53954b1c.json", scope)
+client_gs = gspread.authorize(creds)
 
-def write_row(row_data):
-    try:
-        job_text = row_data[2]
-        job_hash = hashlib.md5(job_text.encode()).hexdigest()
-        if job_hash in HASH_CACHE:
-            return
-        HASH_CACHE.add(job_hash)
-        sheet.append_row(row_data + [job_hash])
-        print(f"[ADDED] {row_data}")
-    except Exception as e:
-        print(f"[ERROR] write_row failed: {e}")
+spreadsheet = client_gs.open("telegram_jobs_raw")
+sheet = spreadsheet.worksheet("raw_jobs")
 
-@telegram_client.on(events.NewMessage(chats=CHANNELS))
+# ====== التجزئة لمنع التكرار ======
+def _get_hash(text: str) -> str:
+    return hashlib.md5(text.encode()).hexdigest()
+
+# ====== الحدث ======
+@client.on(events.NewMessage(chats=CHANNELS))
 async def handler(event):
-    try:
-        sender = await event.get_sender()
-        username = sender.username if sender else "unknown"
-        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        job_text = event.message.message
-        write_row([username, date_str, job_text])
-    except Exception as e:
-        print(f"[ERROR] handler failed: {e}")
+    msg = event.message.message
+    msg_hash = _get_hash(msg)
 
-print("[INFO] Starting Telegram client...")
-telegram_client.start()
-telegram_client.run_until_disconnected()
+    all_hashes = sheet.col_values(1)
+    if msg_hash in all_hashes:
+        print("تم تجاهل رسالة مكررة")
+        return
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append_row([msg_hash, msg, now])
+    print("تمت إضافة وظيفة جديدة")
+
+# ====== التشغيل ======
+async def main():
+    print("[INFO] Starting Telegram client...")
+    await client.start()
+    print("[INFO] Telegram client started.")
+    await client.run_until_disconnected()
+
+if __name__ == "__main__":
+    asyncio.run(main())
